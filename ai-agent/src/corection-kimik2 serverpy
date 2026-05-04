@@ -1,3 +1,4 @@
+
 import os
 import json
 import re
@@ -22,7 +23,9 @@ OPENAPI_URL = os.getenv("OPENAPI_URL", f"{ERP_API_BASE}/openapi")
 
 OPENAPI_CACHE = None
 TOOLS_CACHE = None
+TOOLS_DESCRIPTION_CACHE = None
 
+# Liste des préfixes autorisés (doit matcher api.php)
 ALLOWED_INTERNAL_PREFIXES = (
     "clients",
     "chantiers",
@@ -57,21 +60,27 @@ def get_openapi():
 # ============================================================
 
 def allowed(path: str) -> bool:
+    """Vérifie si le chemin API est dans la liste blanche."""
     return any(path == p or path.startswith(p + "/") for p in ALLOWED_INTERNAL_PREFIXES)
 
 def generate_tool_name(method: str, path: str) -> str:
     """
-    Génère un nom déterministe compatible avec le fine-tuning.
-    GET /clients       -> get_clients
-    GET /clients/{id}  -> get_clients_by_id
-    GET /chantiers     -> get_chantiers
+    Génère un nom déterministe pour la fonction basé sur la méthode et le chemin.
+    Exemples :
+      GET /clients          -> get_clients
+      GET /clients/{id}     -> get_clients_by_id
+      GET /dashboard/stats  -> get_dashboard_stats
     """
-    prefix = method.lower()
+    method_prefix = method.lower()
+    # Nettoyage du chemin
     clean = path.strip("/")
+    # Remplace les paramètres {xxx} par "by_xxx"
     clean = re.sub(r"\{([^}]+)\}", r"by_\1", clean)
+    # Remplace les / et - par des underscores
     clean = clean.replace("/", "_").replace("-", "_")
+    # Supprime les underscores multiples
     clean = re.sub(r"_+", "_", clean)
-    return f"{prefix}_{clean}"
+    return f"{method_prefix}_{clean}"
 
 def openapi_to_tools(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not spec:
@@ -81,8 +90,9 @@ def openapi_to_tools(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     paths = spec.get("paths", {})
 
     for path, methods in paths.items():
+        # Nettoyage du chemin pour correspondre aux routes internes
         clean_path = path.replace("/api/internal", "").replace("/api", "").strip("/")
-
+        
         if not allowed(clean_path):
             continue
 
@@ -90,12 +100,9 @@ def openapi_to_tools(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
             if method.lower() != "get":
                 continue
 
-            # NOM DÉTERMINISTE (coherent avec le fine-tuning)
             name = generate_tool_name(method, clean_path)
-
-            # Description riche pour aider le LLM à choisir
-            summary = details.get("summary", "")
-            description = details.get("description", summary) or f"Accéder à {clean_path}"
+            summary = details.get("summary", f"Accéder à {clean_path}")
+            description = details.get("description", summary)
 
             params = {"type": "object", "properties": {}, "required": []}
 
@@ -103,8 +110,8 @@ def openapi_to_tools(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
                 pname = p.get("name")
                 if not pname:
                     continue
-
-                # Les paramètres de chemin ne vont pas dans le schema JSON
+                
+                # Ignore les paramètres de chemin dans le schema (ils sont gérés séparément)
                 if p.get("in") == "path":
                     continue
 
@@ -116,16 +123,17 @@ def openapi_to_tools(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if p.get("required"):
                     params["required"].append(pname)
 
-            tools.append({
+            tool = {
                 "type": "function",
                 "function": {
                     "name": name,
                     "description": description,
                     "parameters": params,
                     "x-path": clean_path,
-                    "x-method": "GET"
+                    "x-method": method.upper()
                 }
-            })
+            }
+            tools.append(tool)
 
     return tools
 
@@ -136,20 +144,28 @@ def get_tools():
         TOOLS_CACHE = openapi_to_tools(spec)
         print(f"[Tools] {len(TOOLS_CACHE)} outils chargés.")
         for t in TOOLS_CACHE:
-            print(f"  - {t['function']['name']}: {t['function']['description']}")
+            print(f"  - {t['function']['name']}: {t['function']['x-method']} {t['function']['x-path']}")
     return TOOLS_CACHE
 
 def build_tools_description(tools: List[Dict[str, Any]]) -> str:
-    """Texte descriptif des outils pour le prompt système."""
+    """Génère une description textuelle des outils pour le prompt système."""
     lines = []
     for tool in tools:
         fn = tool["function"]
-        lines.append(f"• {fn['name']}: {fn['description']}")
+        lines.append(f"- {fn['name']}: {fn['description']} (endpoint: {fn['x-method']} /{fn['x-path']})")
         if fn["parameters"]["properties"]:
+            lines.append("  Paramètres:")
             for pname, pschema in fn["parameters"]["properties"].items():
-                req = " (obligatoire)" if pname in fn["parameters"].get("required", []) else " (optionnel)"
-                lines.append(f"    - {pname}{req}: {pschema.get('description', '')}")
+                req = " (requis)" if pname in fn["parameters"].get("required", []) else ""
+                lines.append(f"    • {pname}: {pschema.get('description', '')}{req}")
     return "\n".join(lines)
+
+def get_tools_description():
+    global TOOLS_DESCRIPTION_CACHE
+    if TOOLS_DESCRIPTION_CACHE is None:
+        tools = get_tools()
+        TOOLS_DESCRIPTION_CACHE = build_tools_description(tools) if tools else "Aucun outil disponible."
+    return TOOLS_DESCRIPTION_CACHE
 
 # ============================================================
 # EXÉCUTION DES APPELS API
@@ -158,7 +174,7 @@ def build_tools_description(tools: List[Dict[str, Any]]) -> str:
 def call_api(endpoint, params=None):
     try:
         url = f"{ERP_API_BASE.rstrip('/')}/{endpoint.lstrip('/')}"
-        print(f"[API Call] {url} avec params {params}")
+        print(f"[API Call] {url} | params={params}")
         r = http_requests.get(url, params=params, timeout=15)
         r.raise_for_status()
         return r.json()
@@ -171,6 +187,7 @@ def exec_tool(name, args, tools):
     if not tool:
         return {"error": f"Outil '{name}' non trouvé."}
 
+    # Nettoyage des arguments
     if isinstance(args, str):
         try:
             args = json.loads(args)
@@ -180,39 +197,55 @@ def exec_tool(name, args, tools):
         args = {}
 
     path = tool["function"]["x-path"]
-
-    # Gestion des paramètres de chemin {id}
+    
+    # Gestion des paramètres de chemin (ex: {id})
     path_params = re.findall(r"\{([^}]+)\}", path)
     for p in path_params:
         if p in args:
             path = path.replace(f"{{{p}}}", str(args[p]))
             del args[p]
         else:
-            return {"error": f"Paramètre requis manquant : {p}"}
+            return {"error": f"Paramètre de chemin requis manquant : {p}"}
 
     return call_api(path, args)
+
+# ============================================================
+# VALIDATION DES TOOL CALLS
+# ============================================================
+
+def validate_tool_calls(msg: Dict[str, Any], tools: List[Dict[str, Any]]) -> Optional[str]:
+    """Valide que tous les tool_calls demandés existent dans la liste des outils."""
+    tool_names = {t["function"]["name"] for t in tools}
+    for tc in msg.get("tool_calls", []):
+        fn = tc.get("function", {})
+        name = fn.get("name")
+        if name not in tool_names:
+            return f"L'agent a demandé l'outil '{name}' qui n'existe pas. Outils disponibles: {', '.join(tool_names)}"
+    return None
 
 # ============================================================
 # PROMPT SYSTÈME DYNAMIQUE
 # ============================================================
 
 def build_system_prompt() -> str:
-    tools = get_tools()
-    tools_desc = build_tools_description(tools) if tools else "Aucun outil disponible."
-
+    tools_desc = get_tools_description()
     return f"""Tu es l'assistant technique de l'ERP RoadToTP.
-Tu as accès aux outils suivants pour interroger la base de données :
+INTERDICTIONS :
+- Ne jamais inventer de noms de clients, chantiers, employés ou matériels.
+- Ne jamais appeler un outil qui n'est pas listé ci-dessous.
+- Ne jamais répondre à des questions hors sujet (météo, sport, actualités, réservations...).
 
+OUTILS DISPONIBLES :
 {tools_desc}
 
-RÈGLES ABSOLUES :
-1. Dès qu'une question concerne des données (clients, chantiers, employés, matériels, stats, planning), tu DOIS appeler l'outil correspondant.
-2. Tu ne dois JAMAIS inventer de noms de clients ou de chantiers.
-3. Utilise UNIQUEMENT les données JSON retournées par les outils pour répondre.
-4. Si l'outil retourne une liste vide ou une erreur, dis que l'information n'est pas trouvée dans la base.
-5. Pour les questions hors sujet (météo, sport, actualités), refuse poliment.
+PROCESSUS OBLIGATOIRE :
+1. Analyse la question de l'utilisateur.
+2. Si un outil est pertinent, appelle-le avec les bons paramètres.
+3. Utilise UNIQUEMENT les données JSON reçues de l'outil pour répondre.
+4. Si l'outil ne renvoie rien ou une erreur, dis que tu ne trouves pas l'info dans la base de données.
+5. Pour les questions hors-scope de l'ERP, refuse poliment et rappelle ton rôle.
 
-Réponds en français, de manière concise."""
+Réponds en français, de manière concise et professionnelle."""
 
 # ============================================================
 # ROUTE PRINCIPALE
@@ -229,7 +262,7 @@ def ask():
 
         tools = get_tools()
         if not tools:
-            return jsonify({"error": "Aucun outil disponible"}), 503
+            return jsonify({"error": "Aucun outil disponible. L'OpenAPI n'a pas pu être chargée."}), 503
 
         system_prompt = build_system_prompt()
         messages = [
@@ -237,21 +270,41 @@ def ask():
             {"role": "user", "content": question}
         ]
 
-        # Boucle de réflexion (Tool Calling)
+        final_content = "Désolé, je n'ai pas pu traiter votre demande."
+
+        # Boucle de réflexion (Tool Calling) - max 5 itérations
         for i in range(5):
             print(f"[Iteration {i+1}] Envoi à Ollama...")
-            response = ollama_client.chat(
-                model="test:latest",
-                messages=messages,
-                tools=tools
-            )
+            try:
+                response = ollama_client.chat(
+                    model="test:latest",
+                    messages=messages,
+                    tools=tools
+                )
+            except Exception as e:
+                print(f"[Ollama Error] {e}")
+                return jsonify({"error": f"Erreur de communication avec Ollama: {str(e)}"}), 502
 
             msg = response.get("message", {})
+            if not msg:
+                return jsonify({"error": "Réponse vide d'Ollama"}), 502
+
             messages.append(msg)
 
-            # Si pas de tool_calls, c'est la réponse finale
+            # Si pas de tool_calls, on a la réponse finale
             if not msg.get("tool_calls"):
+                final_content = msg.get("content", "")
                 break
+
+            # Validation des tool_calls
+            validation_error = validate_tool_calls(msg, tools)
+            if validation_error:
+                print(f"[Validation Error] {validation_error}")
+                messages.append({
+                    "role": "tool",
+                    "content": json.dumps({"error": validation_error}, ensure_ascii=False)
+                })
+                continue
 
             # Exécution des appels d'outils demandés
             for tc in msg["tool_calls"]:
@@ -266,8 +319,11 @@ def ask():
                     "role": "tool",
                     "content": json.dumps(result, ensure_ascii=False)
                 })
+        else:
+            # Si on sort par la limite de boucle sans réponse finale
+            final_content = "Je n'ai pas pu finaliser le traitement après plusieurs tentatives."
 
-        return jsonify({"response": msg.get("content", "")})
+        return jsonify({"response": final_content})
 
     except Exception as e:
         print("[FATAL ERROR]")
@@ -276,7 +332,15 @@ def ask():
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "tools": len(get_tools() or [])})
+    tools = get_tools()
+    return jsonify({
+        "status": "ok",
+        "tools_loaded": len(tools or []),
+        "openapi_available": get_openapi() is not None
+    })
 
 if __name__ == "__main__":
+    # Préchargement au démarrage
+    print("[Startup] Préchargement de l'OpenAPI et des tools...")
+    get_tools()
     app.run(host="0.0.0.0", port=8000, threaded=True)
