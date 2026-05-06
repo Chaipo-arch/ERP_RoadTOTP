@@ -107,56 +107,54 @@ services:
       - mysql
     networks:
       - erp-network
-  mailserver:
-    image: ghcr.io/docker-mailserver/docker-mailserver:latest
-    container_name: mailserver
-    hostname: mail
-    domainname: mondomaine.com
-    ports:
-      - "25:25"    # SMTP
-      - "143:143"  # IMAP
-      - "587:587"  # Submission
-      - "993:993"  # IMAPS
-    volumes:
-      - ./docker-data/dms/mail-data/:/var/mail/
-      - ./docker-data/dms/mail-state/:/var/mail-state/
-      - ./docker-data/dms/mail-logs/:/var/log/mail/
-      - ./docker-data/dms/config/:/tmp/docker-mailserver/
-      - /etc/localtime:/etc/localtime:ro
-    environment:
-      - ENABLE_SPAMASSASSIN=1
-      - ENABLE_CLAMAV=0 # Désactivé par défaut (consomme bcp de RAM)
-      - ENABLE_FAIL2BAN=1
-      - SSL_TYPE=
-      - ONE_DIR=1  # Aide à garder la config regroupée
-    networks:
-      - erp-network
-      # mail : contact@mondomaine.com et mdp votre_mot_de_passe
+  # mailserver:
+  #   image: ghcr.io/docker-mailserver/docker-mailserver:latest
+  #   container_name: mailserver
+  #   hostname: mail
+  #   domainname: mondomaine.com
+  #   ports:
+  #     - "25:25"    # SMTP
+  #     - "143:143"  # IMAP
+  #     - "587:587"  # Submission
+  #     - "993:993"  # IMAPS
+  #   volumes:
+  #     - ./docker-data/dms/mail-data/:/var/mail/
+  #     - ./docker-data/dms/mail-state/:/var/mail-state/
+  #     - ./docker-data/dms/mail-logs/:/var/log/mail/
+  #     - ./docker-data/dms/config/:/tmp/docker-mailserver/
+  #     - /etc/localtime:/etc/localtime:ro
+  #   environment:
+  #     - ENABLE_SPAMASSASSIN=1
+  #     - ENABLE_CLAMAV=0 # Désactivé par défaut (consomme bcp de RAM)
+  #     - ENABLE_FAIL2BAN=1
+  #     - SSL_TYPE=
+  #     - ONE_DIR=1  # Aide à garder la config regroupée
+  #   networks:
+  #     - erp-network
+  #     # mail : contact@mondomaine.com et mdp votre_mot_de_passe
 
   ollama:
     image: ollama/ollama:latest
     container_name: erp-ollama
+    ports:
+      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./ollama:/models
     networks:
       - erp-network
-
-  ollama-pull-model:
-    image: curlimages/curl:latest
-    container_name: erp-ollama-setup
-    networks:
-      - erp-network
-    depends_on:
-      - ollama
-    entrypoint: [ "/bin/sh", "-c" ]
+    entrypoint: ["/bin/sh", "-c"]
     command: >
-      "echo 'Waiting for Ollama API...' &&
-      until curl -s http://ollama:11434/api/tags > /dev/null; do
-        sleep 2;
-      done;
-      echo 'Pulling model...';
-      curl -X POST http://ollama:11434/api/pull -H 'Content-Type: application/json' -d '{\"name\": \"qwen2.5:3b-instruct\"}';"
-  
+      "
+      ollama serve &
+      sleep 5 &&
+      if ! ollama list | grep -q test; then
+        echo 'Creating model...';
+        ollama create test -f /models/Modelfile;
+      fi;
+      wait
+      "
+
   chromadb:
     image: chromadb/chroma:latest
     container_name: erp-chromadb
