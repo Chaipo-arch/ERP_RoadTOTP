@@ -33,4 +33,5 @@ class EmployeContrats extends Model
     {
         return $this->belongsTo(Contrat::class);
     }
+    
 }

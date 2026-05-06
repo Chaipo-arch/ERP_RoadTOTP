@@ -208,4 +208,79 @@ class EmployeController extends Controller
        
         return response()->json($users);
     }
+
+    /**
+     * Créer un employé ET son compte utilisateur en même temps.
+     * Le mot de passe est généré automatiquement et retourné une seule fois.
+     */
+    public function storeWithUser(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            // Données de l'employé
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|unique:employes,email|unique:users,email',
+            'phone' => 'required|string',
+            'job_title' => 'required|string',
+            'department' => 'nullable|string',
+            'hire_date' => 'required|date',
+            'status' => 'required|in:Actif,Congé,Formation,Inactif',
+            'manager_id' => 'nullable|exists:employes,id',
+
+            // Données du contrat
+            'contrat_id' => 'required|integer',
+            'hourly_salary' => 'nullable|numeric|min:0',
+
+            // Rôle pour le compte utilisateur (optionnel, par défaut le premier rôle)
+            'role_id' => 'nullable|exists:roles,id',
+        ]);
+
+        try {
+            return DB::transaction(function () use ($validated) {
+                // 1. Générer un mot de passe temporaire
+                $tempPassword = \Illuminate\Support\Str::random(12);
+
+                // 2. Créer le compte utilisateur
+                $user = User::create([
+                    'name' => $validated['first_name'] . ' ' . $validated['last_name'],
+                    'email' => $validated['email'],
+                    'password' => \Illuminate\Support\Facades\Hash::make($tempPassword),
+                    'company_id' => auth()->user()->company_id,
+                    'role_id' => $validated['role_id'] ?? null,
+                ]);
+
+                // 3. Créer l'employé lié au user
+                $employe = Employe::create([
+                    'company_id' => auth()->user()->company_id,
+                    'first_name' => $validated['first_name'],
+                    'last_name' => $validated['last_name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'],
+                    'job_title' => $validated['job_title'],
+                    'department' => $validated['department'],
+                    'status' => $validated['status'],
+                    'manager_id' => $validated['manager_id'],
+                    'user_id' => $user->id,
+                ]);
+
+                // 4. Créer le contrat
+                $employe->contracts()->create([
+                    'contrat_id' => $validated['contrat_id'],
+                    'job_title' => $validated['job_title'],
+                    'hourly_salary' => $validated['hourly_salary'] ?? 0,
+                    'start_date' => $validated['hire_date'],
+                    'status' => 'Actif'
+                ]);
+
+                return response()->json([
+                    'employe' => $employe->load('contracts'),
+                    'user' => $user,
+                    'temp_password' => $tempPassword,
+                    'message' => 'Employé et compte utilisateur créés avec succès.',
+                ], 201);
+            });
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Erreur lors de la création : ' . $e->getMessage()], 500);
+        }
+    }
 }

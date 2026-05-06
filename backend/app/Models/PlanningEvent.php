@@ -17,8 +17,10 @@ class PlanningEvent extends Model
         'date',
         'end_date',
         'time',
+        'end_time',
         'location',
         'chantier_id',
+        'employe_id',
         'team',
         'company_id',
     ];
@@ -31,5 +33,10 @@ class PlanningEvent extends Model
     public function chantier(): BelongsTo
     {
         return $this->belongsTo(Chantier::class);
+    }
+
+    public function employe(): BelongsTo
+    {
+        return $this->belongsTo(Employe::class);
     }
 }

@@ -21,6 +21,7 @@ class ChantierController extends Controller
     #[OA\Get(
         path: "/api/chantiers",
         summary: "Lister les chantiers",
+        function: "",
         tags: ["Chantier"],
         responses: [
             new OA\Response(
