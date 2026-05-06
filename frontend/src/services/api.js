@@ -115,6 +115,8 @@ export const clientsApi = {
 // --- PLANNING API ---
 export const planningApi = {
     getEvents: (params) => api.get('/planning/events', { params }),
+    getMyEvents: (params) => api.get('/planning/my-events', { params }),
+    getChantiers: () => api.get('/planning/chantiers'),
     createEvent: (data) => api.post('/planning/events', data),
     updateEvent: (id, data) => api.put(`/planning/events/${id}`, data),
     deleteEvent: (id) => api.delete(`/planning/events/${id}`),
@@ -202,6 +204,24 @@ export const rhApi = {
     deleteEmploye: (id) => api.delete(`/employes/${id}`),
     getEmployeSubordinates: (id) => api.get(`/employes/${id}/subordinates`),
     getAvailableUsers: () => api.get('/employes/available-users'),
+    createEmployeWithUser: (data) => api.post('/employes/create-with-user', data),
+
+    // Documents riche (TipTap) liés à un employé
+    getEmployeDocuments: (employeId) => api.get(`/employes/${employeId}/rich-documents`),
+    getEmployeDocument: (employeId, docId) => api.get(`/employes/${employeId}/rich-documents/${docId}`),
+    createEmployeDocument: (employeId, data) => api.post(`/employes/${employeId}/rich-documents`, data),
+    updateEmployeDocument: (employeId, docId, data) => api.put(`/employes/${employeId}/rich-documents/${docId}`, data),
+    deleteEmployeDocument: (employeId, docId) => api.delete(`/employes/${employeId}/rich-documents/${docId}`),
+};
+
+// --- MODÈLES DE CONTRAT (TipTap) ---
+export const contractTemplatesApi = {
+    getAll: (params) => api.get('/contract-templates', { params }),
+    getOne: (id) => api.get(`/contract-templates/${id}`),
+    create: (data) => api.post('/contract-templates', data),
+    update: (id, data) => api.put(`/contract-templates/${id}`, data),
+    delete: (id) => api.delete(`/contract-templates/${id}`),
+    duplicate: (id) => api.post(`/contract-templates/${id}/duplicate`),
 };
 
 export default api;

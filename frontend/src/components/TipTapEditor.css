@@ -1,0 +1,293 @@
+/* ─────────────────────────────────────────────────────────────
+   TipTapEditor.css — Styles pour l'éditeur riche TipTap
+   ───────────────────────────────────────────────────────────── */
+
+.tiptap-wrapper {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-secondary);
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+
+.tiptap-wrapper:focus-within {
+    border-color: var(--primary-400);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+/* ── Barre d'outils ── */
+.tiptap-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tiptap-toolbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.tiptap-toolbar-btn:hover:not(.tiptap-toolbar-btn--disabled) {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--primary-400);
+}
+
+.tiptap-toolbar-btn--active {
+    background: rgba(245, 158, 11, 0.2) !important;
+    color: var(--primary-400) !important;
+}
+
+.tiptap-toolbar-btn--disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.tiptap-toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border-color);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* Color picker wrapper */
+.tiptap-color-picker {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 28px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tiptap-color-picker:hover {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--primary-400);
+}
+
+.tiptap-color-picker input[type="color"] {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+}
+
+/* ── Zone d'édition ── */
+.tiptap-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.tiptap-content .ProseMirror {
+    padding: 16px 20px;
+    min-height: inherit;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.7;
+    font-family: 'Inter', sans-serif;
+}
+
+.tiptap-content--readonly .ProseMirror {
+    padding: 12px 16px;
+    cursor: default;
+}
+
+/* Placeholder */
+.tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: var(--text-muted);
+    pointer-events: none;
+    height: 0;
+    font-style: italic;
+    opacity: 0.7;
+}
+
+/* Headings */
+.tiptap-content .ProseMirror h1 {
+    font-size: 1.6em;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 1em 0 0.5em;
+    line-height: 1.3;
+    border-bottom: 2px solid var(--primary-400);
+    padding-bottom: 8px;
+}
+
+.tiptap-content .ProseMirror h2 {
+    font-size: 1.3em;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0.9em 0 0.4em;
+    line-height: 1.3;
+}
+
+.tiptap-content .ProseMirror h3 {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0.8em 0 0.3em;
+}
+
+/* Paragraphs */
+.tiptap-content .ProseMirror p {
+    margin: 0.5em 0;
+}
+
+/* Bold, italic */
+.tiptap-content .ProseMirror strong { font-weight: 700; }
+.tiptap-content .ProseMirror em { font-style: italic; }
+.tiptap-content .ProseMirror u { text-decoration: underline; }
+.tiptap-content .ProseMirror s { text-decoration: line-through; }
+
+/* Code */
+.tiptap-content .ProseMirror code {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88em;
+    color: var(--primary-300);
+}
+
+.tiptap-content .ProseMirror pre {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 0.8em 0;
+}
+
+.tiptap-content .ProseMirror pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.85em;
+    color: var(--text-primary);
+}
+
+/* Lists */
+.tiptap-content .ProseMirror ul,
+.tiptap-content .ProseMirror ol {
+    padding-left: 1.5em;
+    margin: 0.5em 0;
+}
+
+.tiptap-content .ProseMirror li {
+    margin: 0.25em 0;
+}
+
+.tiptap-content .ProseMirror ul li::marker {
+    color: var(--primary-400);
+}
+
+.tiptap-content .ProseMirror ol li::marker {
+    color: var(--primary-400);
+    font-weight: 600;
+}
+
+/* Blockquote */
+.tiptap-content .ProseMirror blockquote {
+    border-left: 3px solid var(--primary-400);
+    padding: 8px 16px;
+    margin: 0.8em 0;
+    background: rgba(245, 158, 11, 0.05);
+    border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Horizontal rule */
+.tiptap-content .ProseMirror hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 1em 0;
+}
+
+/* Link */
+.tiptap-content .ProseMirror a,
+.tiptap-content .ProseMirror .tiptap-link {
+    color: var(--primary-400);
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.tiptap-content .ProseMirror a:hover {
+    color: var(--primary-300);
+}
+
+/* Highlight */
+.tiptap-content .ProseMirror mark {
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Selection */
+.tiptap-content .ProseMirror ::selection {
+    background: rgba(245, 158, 11, 0.25);
+}
+
+/* ── Mode lecture seule ── */
+.tiptap-content--readonly .ProseMirror {
+    pointer-events: none;
+    user-select: none;
+}
+/* ── Styles pour les Tableaux TipTap ── */
+.tiptap-content table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    margin: 1rem 0;
+    overflow: hidden;
+}
+
+.tiptap-content td,
+.tiptap-content th {
+    min-width: 1em;
+    border: 1px solid var(--border-color, #cbd5e1); /* Remplace par ta couleur si besoin */
+    padding: 6px 8px;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.tiptap-content th {
+    font-weight: bold;
+    text-align: left;
+    background-color: var(--bg-tertiary, #f1f5f9);
+}
+
+/* ── Styles pour les Images ── */
+.tiptap-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 1rem 0;
+}

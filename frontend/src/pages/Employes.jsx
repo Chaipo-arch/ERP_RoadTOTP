@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { rhApi } from '../services/api';
-import { Plus, Search, Phone, Mail, Edit, Trash2, X, Briefcase, Calendar, Loader, User, Users } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Edit, Trash2, X, Briefcase, Calendar, Loader, User, Users, UserPlus, Check, FileText, ChevronRight } from 'lucide-react';
 import '../index.css';
+import TipTapEditor from '../components/TipTapEditor';
 
 const statusOptions = ['Tous', 'Actif', 'Congé', 'Formation', 'Inactif'];
 
@@ -14,6 +15,8 @@ function Employes() {
     const [showModal, setShowModal] = useState(false);
     const [editingEmploye, setEditingEmploye] = useState(null);
     const [availableUsers, setAvailableUsers] = useState([]);
+    const [createAlsoUser, setCreateAlsoUser] = useState(false);
+    const [tempPasswordInfo, setTempPasswordInfo] = useState(null);
 
     const initialFormState = {
         first_name: '',
@@ -30,6 +33,10 @@ function Employes() {
         contrat_id: '1',
     };
     const [formData, setFormData] = useState(initialFormState);
+    const [modalTab, setModalTab] = useState('info'); // 'info' | 'document'
+    const [docData, setDocData] = useState({ name: 'Document employé', type: 'contrat', content: '' });
+    const [employeDocuments, setEmployeDocuments] = useState([]);
+    const [loadingDocs, setLoadingDocs] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -86,29 +93,60 @@ function Employes() {
                 user_id: formData.user_id ? parseInt(formData.user_id) : null
             };
 
+            let createdEmployeId = null;
+
             if (editingEmploye) {
                 await rhApi.updateEmploye(editingEmploye.id, payload);
+                createdEmployeId = editingEmploye.id;
                 alert('Employé modifié avec succès');
+            } else if (createAlsoUser) {
+                // Créer employé + compte utilisateur en même temps
+                const res = await rhApi.createEmployeWithUser(payload);
+                const data = res.data;
+                createdEmployeId = data.employe?.id;
+                setTempPasswordInfo({
+                    email: payload.email,
+                    password: data.temp_password,
+                    name: `${payload.first_name} ${payload.last_name}`,
+                });
             } else {
-                await rhApi.createEmploye(payload);
+                const res = await rhApi.createEmploye(payload);
+                createdEmployeId = (res.data.data || res.data)?.id;
                 alert('Employé créé avec succès');
+            }
+
+            // Si un document a été rédigé, l'enregistrer
+            if (createdEmployeId && docData.content && docData.content.trim() !== '<p></p>') {
+                try {
+                    await rhApi.createEmployeDocument(createdEmployeId, docData);
+                } catch (docErr) {
+                    console.error('Erreur sauvegarde document:', docErr);
+                }
             }
 
             closeModal();
             fetchData();
         } catch (error) {
             console.error("Erreur sauvegarde:", error);
-            alert(error.response?.data?.message || "Erreur lors de l'enregistrement");
+            const errMsg = error.response?.data?.message || error.response?.data?.error || "Erreur lors de l'enregistrement";
+            alert(errMsg);
         }
     };
 
     const openModal = (employe = null) => {
         setEditingEmploye(employe);
+        setCreateAlsoUser(false);
+        setModalTab('info');
+        setDocData({ name: 'Document employé', type: 'contrat', content: '' });
         loadAvailableUsers();
-        rhApi.getEmployeById(employe.id).then((res) => {
-            const data = res.data.data || res.data || [];
-            setFormData(data);
-        });
+        if (employe) {
+            rhApi.getEmployeById(employe.id).then((res) => {
+                const data = res.data.data || res.data || [];
+                setFormData(data);
+            });
+        } else {
+            setFormData(initialFormState);
+        }
         setShowModal(true);
     };
 
@@ -116,6 +154,9 @@ function Employes() {
         setShowModal(false);
         setEditingEmploye(null);
         setFormData(initialFormState);
+        setCreateAlsoUser(false);
+        setModalTab('info');
+        setDocData({ name: 'Document employé', type: 'contrat', content: '' });
     };
 
     const deleteEmploye = async (id) => {
@@ -316,7 +357,7 @@ function Employes() {
 
             {/* Modal */}
             <div className={`modal-overlay ${showModal ? 'active' : ''}`} onClick={closeModal}>
-                <div className="modal" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+                <div className="modal" style={{ maxWidth: '760px', height: '90vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
                     <div className="modal-header">
                         <h2 className="modal-title">
                             {editingEmploye ? 'Modifier un employé' : 'Nouvel employé'}
@@ -326,8 +367,52 @@ function Employes() {
                         </button>
                     </div>
 
-                    <form onSubmit={handleSubmit}>
-                        <div className="modal-body">
+                    {/* Onglets */}
+                    <div style={{
+                        display: 'flex', gap: 0,
+                        borderBottom: '1px solid var(--border-color)',
+                        background: 'var(--bg-tertiary)',
+                        padding: '0 24px',
+                        flexShrink: 0,
+                    }}>
+                        {[
+                            { key: 'info', label: 'Informations', icon: User },
+                            { key: 'document', label: 'Document associé', icon: FileText },
+                        ].map(tab => {
+                            const TabIcon = tab.icon;
+                            return (
+                                <button
+                                    key={tab.key}
+                                    type="button"
+                                    onClick={() => setModalTab(tab.key)}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                        padding: '12px 20px',
+                                        border: 'none',
+                                        borderBottom: modalTab === tab.key
+                                            ? '2px solid var(--primary-400)'
+                                            : '2px solid transparent',
+                                        background: 'transparent',
+                                        color: modalTab === tab.key ? 'var(--primary-400)' : 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        fontSize: 13,
+                                        fontWeight: modalTab === tab.key ? 600 : 400,
+                                        transition: 'all 0.15s ease',
+                                        marginBottom: '-1px',
+                                    }}
+                                >
+                                    <TabIcon size={15} />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+                            {/* === ONGLET INFORMATIONS === */}
+                            {modalTab === 'info' && (
+                                <div>
                             {/* Section Identité */}
                             <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--primary-400)' }}>
                                 Identité
@@ -409,18 +494,89 @@ function Employes() {
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Utilisateur lié</label>
-                                    <select
-                                        className="form-input form-select"
-                                        value={formData.user_id}
-                                        onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
-                                    >
-                                        <option value="">Aucun compte lié</option>
-                                        {availableUsers.map((user) => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.name} ({user.email})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    {!editingEmploye && (
+                                        <label
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                padding: '10px 14px',
+                                                marginBottom: '8px',
+                                                borderRadius: 'var(--border-radius-sm)',
+                                                background: createAlsoUser
+                                                    ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(217, 119, 6, 0.06))'
+                                                    : 'var(--bg-tertiary)',
+                                                border: createAlsoUser
+                                                    ? '1px solid var(--primary-400)'
+                                                    : '1px solid var(--border-color)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                fontSize: '13px',
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    width: '20px',
+                                                    height: '20px',
+                                                    borderRadius: '4px',
+                                                    border: createAlsoUser
+                                                        ? '2px solid var(--primary-400)'
+                                                        : '2px solid var(--text-muted)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    background: createAlsoUser ? 'var(--primary-400)' : 'transparent',
+                                                    transition: 'all 0.2s ease',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {createAlsoUser && <Check size={14} style={{ color: '#fff' }} />}
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={createAlsoUser}
+                                                onChange={(e) => {
+                                                    setCreateAlsoUser(e.target.checked);
+                                                    if (e.target.checked) {
+                                                        setFormData({ ...formData, user_id: '' });
+                                                    }
+                                                }}
+                                                style={{ display: 'none' }}
+                                            />
+                                            <UserPlus size={16} style={{ color: createAlsoUser ? 'var(--primary-400)' : 'var(--text-muted)' }} />
+                                            <span style={{ color: createAlsoUser ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                                                Créer un compte utilisateur avec cet e-mail
+                                            </span>
+                                        </label>
+                                    )}
+                                    {!createAlsoUser && (
+                                        <select
+                                            className="form-input form-select"
+                                            value={formData.user_id}
+                                            onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
+                                        >
+                                            <option value="">Aucun compte lié</option>
+                                            {availableUsers.map((user) => (
+                                                <option key={user.id} value={user.id}>
+                                                    {user.name} ({user.email})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                    {createAlsoUser && (
+                                        <div style={{
+                                            padding: '10px 14px',
+                                            borderRadius: 'var(--border-radius-sm)',
+                                            background: 'rgba(245, 158, 11, 0.06)',
+                                            border: '1px dashed var(--primary-300)',
+                                            fontSize: '12px',
+                                            color: 'var(--text-secondary)',
+                                            lineHeight: '1.5',
+                                        }}>
+                                            <strong style={{ color: 'var(--primary-400)' }}>Un compte sera créé</strong> avec l'e-mail saisi ci-dessus.
+                                            Un mot de passe temporaire sera généré et affiché après la création.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="form-group">
@@ -496,17 +652,133 @@ function Employes() {
                                     />
                                 </div>
                             </div>
+                                </div>
+                            )}
+
+                            {/* === ONGLET DOCUMENT === */}
+                            {modalTab === 'document' && (
+                                <div>
+                                    <div style={{ marginBottom: '12px', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--primary-400)' }}>
+                                        Document associé à l'employé
+                                    </div>
+                                    <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                                        Rédigez un document (contrat, note, courrier…) qui sera attaché à cet employé.
+                                        Ce champ est facultatif.
+                                    </p>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label">Nom du document</label>
+                                            <input
+                                                className="form-input"
+                                                value={docData.name}
+                                                onChange={(e) => setDocData({ ...docData, name: e.target.value })}
+                                                placeholder="Ex: Contrat de travail"
+                                            />
+                                        </div>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="form-label">Type</label>
+                                            <select
+                                                className="form-input form-select"
+                                                value={docData.type}
+                                                onChange={(e) => setDocData({ ...docData, type: e.target.value })}
+                                            >
+                                                <option value="contrat">Contrat</option>
+                                                <option value="note">Note</option>
+                                                <option value="courrier">Courrier</option>
+                                                <option value="attestation">Attestation</option>
+                                                <option value="autre">Autre</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label className="form-label">Contenu du document</label>
+                                        <TipTapEditor
+                                            content={docData.content}
+                                            onChange={(html) => setDocData({ ...docData, content: html })}
+                                            placeholder="Rédigez votre document ici... Vous pouvez utiliser le formatage riche."
+                                            minHeight={340}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="modal-footer">
                             <button type="button" className="btn btn-secondary" onClick={closeModal}>
                                 Annuler
                             </button>
+                            {modalTab === 'info' && !editingEmploye && (
+                                <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    onClick={() => setModalTab('document')}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                                >
+                                    Document associé <ChevronRight size={16} />
+                                </button>
+                            )}
                             <button type="submit" className="btn btn-primary">
                                 {editingEmploye ? 'Enregistrer' : 'Créer'}
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            {/* Modal mot de passe temporaire */}
+            <div className={`modal-overlay ${tempPasswordInfo ? 'active' : ''}`} onClick={() => setTempPasswordInfo(null)}>
+                <div className="modal" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                        <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <UserPlus size={22} style={{ color: 'var(--success-500)' }} />
+                            Compte créé avec succès
+                        </h2>
+                        <button className="modal-close" onClick={() => setTempPasswordInfo(null)}>
+                            <X size={20} />
+                        </button>
+                    </div>
+                    {tempPasswordInfo && (
+                        <div className="modal-body">
+                            <div style={{
+                                padding: '20px',
+                                borderRadius: 'var(--border-radius)',
+                                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.04))',
+                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                                marginBottom: '16px',
+                            }}>
+                                <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '16px' }}>
+                                    L'employé <strong>{tempPasswordInfo.name}</strong> et son compte utilisateur ont été créés.
+                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--border-radius-sm)' }}>
+                                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Email</span>
+                                        <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'monospace' }}>{tempPasswordInfo.email}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 'var(--border-radius-sm)' }}>
+                                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Mot de passe</span>
+                                        <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--primary-400)', letterSpacing: '1px' }}>{tempPasswordInfo.password}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{
+                                padding: '12px 14px',
+                                borderRadius: 'var(--border-radius-sm)',
+                                background: 'rgba(245, 158, 11, 0.08)',
+                                border: '1px solid rgba(245, 158, 11, 0.2)',
+                                fontSize: '12px',
+                                color: 'var(--text-secondary)',
+                            }}>
+                                ⚠️ Notez ce mot de passe maintenant. Il ne sera plus affiché après la fermeture de cette fenêtre.
+                            </div>
+                        </div>
+                    )}
+                    <div className="modal-footer">
+                        <button className="btn btn-primary" onClick={() => setTempPasswordInfo(null)}>
+                            J'ai noté le mot de passe
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

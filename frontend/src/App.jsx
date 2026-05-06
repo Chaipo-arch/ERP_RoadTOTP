@@ -22,6 +22,7 @@ import Conges from './pages/RH/Conges';
 import ValidationConges from './pages/RH/ValidationConges';
 import Equipes from './pages/RH/Equipes';
 import Organigramme from './pages/RH/Organigramme';
+import ContratModeles from './pages/ContratModeles';
 
 function App() {
     return (
@@ -48,6 +49,9 @@ function App() {
                         <Route path="/rh/validation-conges" element={<ValidationConges />} />
                         <Route path="/rh/equipes" element={<Equipes />} />
                         <Route path="/rh/organigramme" element={<Organigramme />} />
+
+                        {/* Routes Légal / Contrats */}
+                        <Route path="/contrats/modeles" element={<ContratModeles />} />
 
                         <Route element={<AdminRoute />}>
                             <Route path="/admin/create-user" element={<CreateUser />} />

@@ -20,7 +20,9 @@ import {
     CheckSquare,
     UsersRound,
     Network,
-    Map
+    Map,
+    FileSignature,
+    Scale
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -45,8 +47,12 @@ const secondaryNav = [
 const rhNav = [
     { name: 'Mes Congés', href: '/rh/conges', icon: Calendar, permission: null },
     { name: 'Validation', href: '/rh/validation-conges', icon: CheckSquare, permission: null },
-    { name: 'Équipes', href: '/rh/equipes', icon: UsersRound, permission: 'view_teams' }, // Ou null si pas de perm spécifique encore
+    { name: 'Équipes', href: '/rh/equipes', icon: UsersRound, permission: 'view_teams' },
     { name: 'Organigramme', href: '/rh/organigramme', icon: Network, permission: null },
+];
+
+const legalNav = [
+    { name: 'Modèles de contrat', href: '/contrats/modeles', icon: FileSignature, permission: null },
 ];
 
 function Layout({ children }) {
@@ -61,7 +67,7 @@ function Layout({ children }) {
     };
 
     const getCurrentPageTitle = () => {
-        const allNav = [...navigation, ...secondaryNav, ...rhNav];
+        const allNav = [...navigation, ...secondaryNav, ...rhNav, ...legalNav];
         const current = allNav.find(item => item.href === location.pathname);
         return current?.name || 'ERP RoadToTP';
     };
@@ -104,6 +110,25 @@ function Layout({ children }) {
                     <div className="nav-section">
                         <div className="nav-section-title">Ressources Humaines</div>
                         {rhNav.map((item) => {
+                            if (item.permission && !hasPermission(item.permission)) return null;
+                            return (
+                                <NavLink
+                                    key={item.name}
+                                    to={item.href}
+                                    className={({ isActive }) =>
+                                        `nav-item ${isActive ? 'active' : ''}`
+                                    }
+                                >
+                                    <item.icon className="nav-item-icon" size={20} />
+                                    <span>{item.name}</span>
+                                </NavLink>
+                            );
+                        })}
+                    </div>
+
+                    <div className="nav-section">
+                        <div className="nav-section-title">Légal &amp; Contrats</div>
+                        {legalNav.map((item) => {
                             if (item.permission && !hasPermission(item.permission)) return null;
                             return (
                                 <NavLink
