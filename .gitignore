@@ -15,3 +15,6 @@ yarn-error.log
 .agent/
 backend/storage/
 frontend/node_modules/
+ai-agent/training/qwen2.5-3b-instruct.Q4_K_M.gguf
+docker-data/
+ollama/
