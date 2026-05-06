@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\LeaveRequestController;
+use App\Http\Controllers\Api\ContractTemplateController;
+use App\Http\Controllers\Api\EmployeDocumentController;
 
 // Authentication routes
 Route::prefix('auth')->group(function () {
@@ -63,6 +65,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Planning
     Route::get('/planning/events', [PlanningController::class, 'events']);
+    Route::get('/planning/my-events', [PlanningController::class, 'myEvents']);
+    Route::get('/planning/chantiers', [PlanningController::class, 'chantiers']);
     Route::post('/planning/events', [PlanningController::class, 'createEvent']);
     Route::put('/planning/events/{event}', [PlanningController::class, 'updateEvent']);
     Route::delete('/planning/events/{event}', [PlanningController::class, 'deleteEvent']);
@@ -90,15 +94,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/permissions', [\App\Http\Controllers\Api\PermissionController::class, 'index']);
 
     // ===== MODULE RH =====
-    // Employees
+    // Employees — routes sans paramètre AVANT apiResource pour éviter le conflit avec {employe}
+    Route::get('/employes/user', [EmployeController::class, 'getEmployeByUserId']);
+    Route::get('/employes/available-users', [EmployeController::class, 'availableUsers']);
+    Route::post('/employes/create-with-user', [EmployeController::class, 'storeWithUser']);
+
     Route::apiResource('employes', EmployeController::class);
     Route::get('/employes/{employe}/assignments', [EmployeController::class, 'assignments']);
     Route::patch('/employes/{employe}/status', [EmployeController::class, 'updateStatus']);
-    Route::get('/employes', [EmployeController::class, 'index']);
-    Route::put('/employes/{employe}', [EmployeController::class, 'update']);
-    Route::get('/employes/{employe}', [EmployeController::class, 'show']);
-    Route::get('/employes/user', [EmployeController::class, 'getEmployeByUserId']);
-    Route::get('/employes/available-users', [EmployeController::class, 'availableUsers']);
     Route::get('/employes/{employe}/subordinates', [\App\Http\Controllers\Api\HierarchyController::class, 'subordinates']);
     Route::get('/employes/{employe}/all-subordinates', [\App\Http\Controllers\Api\HierarchyController::class, 'allSubordinates']);
     Route::get('/employes/{employe}/hierarchy-path', [\App\Http\Controllers\Api\HierarchyController::class, 'path']);
@@ -125,7 +128,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/hierarchy/tree', [\App\Http\Controllers\Api\HierarchyController::class, 'tree']);
     Route::get('/hierarchy/stats', [\App\Http\Controllers\Api\HierarchyController::class, 'stats']);
     Route::get('/hierarchy/subtree/{employe}', [\App\Http\Controllers\Api\HierarchyController::class, 'subtree']);
-    
+
+    // ===== MODÈLES DE CONTRAT (TipTap) =====
+    Route::apiResource('contract-templates', ContractTemplateController::class);
+    Route::post('/contract-templates/{contractTemplate}/duplicate', [ContractTemplateController::class, 'duplicate']);
+
+    // ===== DOCUMENTS EMPLOYÉ (éditeur TipTap) =====
+    Route::get('/employes/{employe}/rich-documents', [EmployeDocumentController::class, 'index']);
+    Route::post('/employes/{employe}/rich-documents', [EmployeDocumentController::class, 'store']);
+    Route::get('/employes/{employe}/rich-documents/{document}', [EmployeDocumentController::class, 'show']);
+    Route::put('/employes/{employe}/rich-documents/{document}', [EmployeDocumentController::class, 'update']);
+    Route::delete('/employes/{employe}/rich-documents/{document}', [EmployeDocumentController::class, 'destroy']);
+
 });
 
 // Public health check
@@ -151,6 +165,11 @@ Route::get('/ping', function() { return "pong"; });
 // Ces routes sont accessibles uniquement depuis le réseau Docker interne (pas d'auth requise).
 // Elles permettent à l'agent IA de lire les données de l'ERP.
 Route::prefix('internal')->group(function () {
+    Route::get('/openapi', function () {
+        return response()->json(
+            json_decode(file_get_contents(storage_path('api-docs/api-docs.json')))
+        );
+    });
     Route::get('/clients', function (Request $request) {
         $query = \App\Models\Client::withCount(['chantiers', 'chantiers as active_chantiers_count' => function ($q) {
             $q->whereIn('status', ['En cours', 'Planifié']);
@@ -212,4 +231,25 @@ Route::prefix('internal')->group(function () {
     Route::get('/planning/events', function () {
         return response()->json(\App\Models\PlanningEvent::with(['chantier', 'employe'])->get());
     });
+
+
+
+
+
+// ===== MODULE CONTRATS =====
+// Types de contrats (liste globale)
+Route::get('/contrats/types', [\App\Http\Controllers\Api\ContratController::class, 'types']);
+
+// Contrats d'un employé
+Route::get('/employes/{employe}/contrats', [\App\Http\Controllers\Api\ContratController::class, 'index']);
+Route::post('/employes/{employe}/contrats', [\App\Http\Controllers\Api\ContratController::class, 'store']);
+Route::get('/employes/{employe}/contrats/{contrat}', [\App\Http\Controllers\Api\ContratController::class, 'show']);
+Route::put('/employes/{employe}/contrats/{contrat}', [\App\Http\Controllers\Api\ContratController::class, 'update']);
+Route::delete('/employes/{employe}/contrats/{contrat}', [\App\Http\Controllers\Api\ContratController::class, 'destroy']);
+
+// Documents liés à un contrat
+Route::post('/employes/{employe}/contrats/{contrat}/documents', [\App\Http\Controllers\Api\ContratController::class, 'uploadDocument']);
+Route::delete('/employes/{employe}/contrats/{contrat}/documents/{documentId}', [\App\Http\Controllers\Api\ContratController::class, 'deleteDocument']);
+
+
 });
