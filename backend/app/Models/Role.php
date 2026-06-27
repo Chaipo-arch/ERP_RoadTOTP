@@ -10,7 +10,11 @@ class Role extends Model
     use HasFactory;
 
     protected $fillable = ['name', 'company_id'];
-
+    public function users()
+    {
+        // Un rôle est possédé par plusieurs utilisateurs
+        return $this->hasMany(User::class);
+    }
     public function company()
     {
         return $this->belongsTo(Company::class);

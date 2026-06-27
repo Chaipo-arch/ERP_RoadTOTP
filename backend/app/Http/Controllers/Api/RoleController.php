@@ -4,20 +4,22 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class RoleController extends Controller
 {
+    // Liste des rôles de l'entreprise
     public function index()
     {
-        // Only return roles for the user's company
-        $roles = Role::where('company_id', Auth::user()->company_id)
-                     ->with('permissions')
-                     ->get();
-        return response()->json($roles);
+        return Role::where('company_id', Auth::user()->company_id)
+            ->with('permissions')
+            ->withCount('users') // Compte le nombre d'utilisateurs par rôle
+            ->get();
     }
 
+    // Création d'un rôle
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -31,27 +33,17 @@ class RoleController extends Controller
             'company_id' => Auth::user()->company_id,
         ]);
 
-        if (isset($validated['permissions'])) {
+        if (!empty($validated['permissions'])) {
             $role->permissions()->sync($validated['permissions']);
         }
 
         return response()->json($role->load('permissions'), 201);
     }
 
-    public function show(Role $role)
-    {
-        if ($role->company_id !== Auth::user()->company_id) {
-            abort(403, 'Unauthorized access to this role');
-        }
-
-        return response()->json($role->load('permissions'));
-    }
-
+    // Mise à jour d'un rôle
     public function update(Request $request, Role $role)
     {
-        if ($role->company_id !== Auth::user()->company_id) {
-            abort(403);
-        }
+        if ($role->company_id !== Auth::user()->company_id) abort(403);
         
         $validated = $request->validate([
             'name' => 'string|max:255',
@@ -59,27 +51,48 @@ class RoleController extends Controller
             'permissions.*' => 'exists:permissions,id',
         ]);
 
-        if (isset($validated['name'])) {
-            $role->update(['name' => $validated['name']]);
-        }
-
-        if (isset($validated['permissions'])) {
-            $role->permissions()->sync($validated['permissions']);
-        }
+        if (isset($validated['name'])) $role->update(['name' => $validated['name']]);
+        if (isset($validated['permissions'])) $role->permissions()->sync($validated['permissions']);
 
         return response()->json($role->load('permissions'));
     }
 
-    public function destroy(Role $role)
+    // --- NOUVELLES MÉTHODES POUR L'INTERFACE UTILISATEURS ---
+    public function show(Role $role)
     {
-         if ($role->company_id !== Auth::user()->company_id) {
-            abort(403);
-        }
-        
-        if (Auth::user()->role_id === $role->id) {
-             return response()->json(['message' => 'Cannot delete your own role'], 400);
+        // Sécurité : vérifier que le rôle appartient à l'entreprise de l'utilisateur
+        if ($role->company_id !== Auth::user()->company_id) {
+            abort(403, 'Action non autorisée pour cette entreprise.');
         }
 
+        return response()->json($role->load('permissions'));
+    }
+    // Récupère tous les utilisateurs de l'entreprise pour affectation
+    public function users()
+    {
+        return User::where('company_id', Auth::user()->company_id)
+            ->with('userRole')
+            ->get();
+    }
+
+    // Modifie le rôle d'un utilisateur spécifique
+    public function updateUserRole(Request $request, User $user)
+    {
+        // Sécurité : l'utilisateur doit être dans la même entreprise
+        if ($user->company_id !== Auth::user()->company_id) abort(403);
+
+        $validated = $request->validate([
+            'role_id' => 'nullable|exists:roles,id'
+        ]);
+
+        $user->update(['role_id' => $validated['role_id']]);
+
+        return response()->json(['message' => 'Rôle mis à jour avec succès']);
+    }
+
+    public function destroy(Role $role)
+    {
+        if ($role->company_id !== Auth::user()->company_id) abort(403);
         $role->delete();
         return response()->json(null, 204);
     }

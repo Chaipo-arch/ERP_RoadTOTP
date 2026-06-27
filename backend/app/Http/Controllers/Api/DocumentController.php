@@ -94,6 +94,7 @@ class DocumentController extends Controller
             'client' => \App\Models\Client::class,
             'employe' => \App\Models\Employe::class,
             'materiel' => \App\Models\Materiel::class,
+            'contract_template' => \App\Models\ContractTemplate::class, 
         ];
         return $map[strtolower($type)] ?? null;
     }

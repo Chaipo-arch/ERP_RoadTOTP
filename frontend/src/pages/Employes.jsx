@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { rhApi } from '../services/api';
 import { Plus, Search, Phone, Mail, Edit, Trash2, X, Briefcase, Calendar, Loader, User, Users, UserPlus, Check, FileText, ChevronRight } from 'lucide-react';
 import '../index.css';
-import TipTapEditor from '../components/TipTapEditor';
+//import TipTapEditor from '../components/TipTapEditor';
 
 const statusOptions = ['Tous', 'Actif', 'Congé', 'Formation', 'Inactif'];
 
@@ -694,12 +694,12 @@ function Employes() {
 
                                     <div className="form-group" style={{ marginBottom: 0 }}>
                                         <label className="form-label">Contenu du document</label>
-                                        <TipTapEditor
+                                        {/* <TipTapEditor
                                             content={docData.content}
                                             onChange={(html) => setDocData({ ...docData, content: html })}
                                             placeholder="Rédigez votre document ici... Vous pouvez utiliser le formatage riche."
                                             minHeight={340}
-                                        />
+                                        /> */}
                                     </div>
                                 </div>
                             )}

@@ -87,6 +87,7 @@ export const employesApi = {
     update: (id, data) => api.put(`/employes/${id}`, data),
     delete: (id) => api.delete(`/employes/${id}`),
     updateStatus: (id, status) => api.patch(`/employes/${id}/status`, { status }),
+    getTree: () => api.get('/employes/tree'),
 };
 
 // --- MATERIELS API ---
@@ -148,6 +149,8 @@ export const invitationApi = {
 export const rolesApi = {
     getAll: () => api.get('/roles'),
     getOne: (id) => api.get(`/roles/${id}`),
+    getUsers: () => api.get('/roles-users'),
+    updateUserRole: (userId, roleId) => api.put(`/roles-users/${userId}`, { role_id: roleId }),
     create: (data) => api.post('/roles', data),
     update: (id, data) => api.put(`/roles/${id}`, data),
     delete: (id) => api.delete(`/roles/${id}`),
@@ -214,12 +217,16 @@ export const rhApi = {
     deleteEmployeDocument: (employeId, docId) => api.delete(`/employes/${employeId}/rich-documents/${docId}`),
 };
 
-// --- MODÈLES DE CONTRAT (TipTap) ---
+// --- MODÈLES DE CONTRAT  ---
 export const contractTemplatesApi = {
     getAll: (params) => api.get('/contract-templates', { params }),
     getOne: (id) => api.get(`/contract-templates/${id}`),
-    create: (data) => api.post('/contract-templates', data),
-    update: (id, data) => api.put(`/contract-templates/${id}`, data),
+    create: (formData) => api.post('/contract-templates', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+    update: (id, formData) => api.post(`/contract-templates/${id}?_method=PUT`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    }),
     delete: (id) => api.delete(`/contract-templates/${id}`),
     duplicate: (id) => api.post(`/contract-templates/${id}/duplicate`),
 };

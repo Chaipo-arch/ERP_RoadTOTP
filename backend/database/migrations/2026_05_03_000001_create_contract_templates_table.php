@@ -12,9 +12,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('company_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->unsignedBigInteger('document_id')->nullable();
+            $table->foreign('document_id')->references('id')->on('documents')->nullOnDelete();
             $table->string('name');
             $table->string('category')->default('autre'); // employe, chantier, prestation, autre
-            $table->longText('content'); // HTML content from TipTap
             $table->string('description')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();

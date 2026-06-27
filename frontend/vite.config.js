@@ -20,7 +20,9 @@ export default defineConfig({
         target: 'http://erp-nginx',
         changeOrigin: true,
         secure: false,
-      }
+      },
+      // NOUVEAU : Proxy pour OnlyOffice
+      
     }
   }
 })

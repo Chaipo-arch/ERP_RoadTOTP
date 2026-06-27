@@ -1,223 +1,231 @@
 import React, { useState, useEffect } from 'react';
 import { rolesApi, permissionsApi } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
+import { Shield, Users, Plus, Edit, Trash2, Check, X, Search, Lock } from 'lucide-react';
 
 export default function Roles() {
-    const { hasPermission } = useAuth();
+    const [activeTab, setActiveTab] = useState('roles');
     const [roles, setRoles] = useState([]);
+    const [users, setUsers] = useState([]);
     const [groupedPermissions, setGroupedPermissions] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingRole, setEditingRole] = useState(null);
     const [formData, setFormData] = useState({ name: '', permissions: [] });
-    const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [justToggled, setJustToggled] = useState(null);
 
-    useEffect(() => {
-        fetchRoles();
-        fetchPermissions();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
-    const fetchRoles = async () => {
+    const fetchData = async () => {
+        setIsLoading(true);
         try {
-            const response = await rolesApi.getAll();
-            setRoles(response.data);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setIsLoading(false);
-        }
+            const [r, p, u] = await Promise.all([
+                rolesApi.getAll(),
+                permissionsApi.getAll(),
+                rolesApi.getUsers()
+            ]);
+            setRoles(r.data);
+            setGroupedPermissions(p.data);
+            setUsers(u.data);
+        } catch (e) { console.error(e); }
+        finally { setIsLoading(false); }
     };
 
-    const fetchPermissions = async () => {
-        try {
-            const response = await permissionsApi.getAll();
-            setGroupedPermissions(response.data);
-        } catch (err) {
-            console.error(err);
-        }
+    const handleCloseModal = () => {
+        setShowModal(false);
+        setEditingRole(null);
+        setFormData({ name: '', permissions: [] });
     };
 
-    const handleOpenModal = (role = null) => {
-        if (role) {
-            setEditingRole(role);
-            setFormData({
-                name: role.name,
-                permissions: role.permissions.map(p => p.id)
-            });
-        } else {
-            setEditingRole(null);
-            setFormData({ name: '', permissions: [] });
-        }
-        setShowModal(true);
-    };
-
-    const handlePermissionChange = (permissionId) => {
-        setFormData(prev => {
-            const newPermissions = prev.permissions.includes(permissionId)
-                ? prev.permissions.filter(id => id !== permissionId)
-                : [...prev.permissions, permissionId];
-            return { ...prev, permissions: newPermissions };
-        });
+    const handleTogglePermission = (id) => {
+        setFormData(prev => ({
+            ...prev,
+            permissions: prev.permissions.includes(id)
+                ? prev.permissions.filter(p => p !== id)
+                : [...prev.permissions, id]
+        }));
+        setJustToggled(id);
+        setTimeout(() => setJustToggled(null), 350);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (editingRole) {
-                await rolesApi.update(editingRole.id, formData);
-            } else {
-                await rolesApi.create(formData);
-            }
-            setShowModal(false);
-            fetchRoles();
-        } catch (err) {
-            setError('Erreur lors de l\'enregistrement du rôle');
-        }
+            editingRole
+                ? await rolesApi.update(editingRole.id, formData)
+                : await rolesApi.create(formData);
+            handleCloseModal();
+            fetchData();
+        } catch (e) { alert("Erreur lors de l'enregistrement"); }
     };
 
-    const handleDelete = async (roleId) => {
-        if (window.confirm('Voulez-vous vraiment supprimer ce rôle ?')) {
-            try {
-                await rolesApi.delete(roleId);
-                fetchRoles();
-            } catch (err) {
-                alert('Impossible de supprimer ce rôle. Il est peut-être assigné à un utilisateur.');
-            }
-        }
-    };
+    const selectedCount = formData.permissions.length;
 
-    if (isLoading) return <div className="p-8 text-center">Chargement...</div>;
+    if (isLoading) return <div className="loading-state">Chargement des habilitations...</div>;
 
     return (
-        <div className="container mx-auto px-4 py-8">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">Gestion des Rôles</h1>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition"
-                >
-                    + Nouveau Rôle
-                </button>
-            </div>
-
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nom du Rôle</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Permissions</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                        {roles.map(role => (
-                            <tr key={role.id}>
-                                <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{role.name}</td>
-                                <td className="px-6 py-4">
-                                    <div className="flex flex-wrap gap-2">
-                                        {role.permissions.slice(0, 5).map(p => (
-                                            <span key={p.id} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                {p.name}
-                                            </span>
-                                        ))}
-                                        {role.permissions.length > 5 && (
-                                            <span className="text-xs text-gray-500">+{role.permissions.length - 5} autres</span>
-                                        )}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button
-                                        onClick={() => handleOpenModal(role)}
-                                        className="text-indigo-600 hover:text-indigo-900 mr-4"
-                                    >
-                                        Modifier
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(role.id)}
-                                        className="text-red-600 hover:text-red-900"
-                                    >
-                                        Supprimer
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {showModal && (
-                <div className="fixed inset-0 z-50 overflow-y-auto">
-                    <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-                            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-                        </div>
-
-                        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-
-                        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-                            <form onSubmit={handleSubmit}>
-                                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                                        {editingRole ? 'Modifier le Rôle' : 'Créer un Nouveau Rôle'}
-                                    </h3>
-
-                                    {error && <div className="mb-4 text-red-600 bg-red-50 p-2 rounded">{error}</div>}
-
-                                    <div className="mb-4">
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Nom du Rôle</label>
-                                        <input
-                                            type="text"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                            required
-                                        />
-                                    </div>
-
-                                    <div className="mb-4">
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Permissions par Module</label>
-                                        <div className="space-y-4 max-h-96 overflow-y-auto border p-4 rounded">
-                                            {Object.entries(groupedPermissions).map(([module, permissions]) => (
-                                                <div key={module}>
-                                                    <h4 className="font-semibold text-gray-800 border-b pb-1 mb-2">{module}</h4>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {permissions.map(p => (
-                                                            <label key={p.id} className="inline-flex items-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="form-checkbox h-4 w-4 text-blue-600"
-                                                                    checked={formData.permissions.includes(p.id)}
-                                                                    onChange={() => handlePermissionChange(p.id)}
-                                                                />
-                                                                <span className="ml-2 text-sm text-gray-700">{p.name}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                                    <button
-                                        type="submit"
-                                        className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
-                                    >
-                                        Enregistrer
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowModal(false)}
-                                        className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                                    >
-                                        Annuler
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+        <div className="roles-page">
+            <header className="page-header">
+                <div className="header-info">
+                    <h1>Accès & Habilitations</h1>
+                    <p>Gérez les droits d'accès et les rôles de vos collaborateurs.</p>
+                </div>
+                <div className="header-actions">
+                    <div className="tab-switcher">
+                        <button className={activeTab === 'roles' ? 'active' : ''} onClick={() => setActiveTab('roles')}>
+                            <Shield size={16} /> Rôles
+                        </button>
+                        <button className={activeTab === 'users' ? 'active' : ''} onClick={() => setActiveTab('users')}>
+                            <Users size={16} /> Utilisateurs
+                        </button>
                     </div>
+                    {activeTab === 'roles' && (
+                        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                            <Plus size={18} /> Nouveau Rôle
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            {activeTab === 'roles' ? (
+                <div className="roles-grid">
+                    {roles.map(role => (
+                        <div key={role.id} className="card role-card">
+                            <div className="role-card-header">
+                                <div className="role-icon"><Shield size={20} /></div>
+                                <div className="role-actions">
+                                    <button
+                                        onClick={() => {
+                                            setEditingRole(role);
+                                            setFormData({ name: role.name, permissions: role.permissions.map(p => p.id) });
+                                            setShowModal(true);
+                                        }}
+                                        className="btn btn-ghost btn-icon btn-sm"
+                                    >
+                                        <Edit size={14} />
+                                    </button>
+                                    <button className="btn btn-ghost btn-icon btn-sm delete"><Trash2 size={14} /></button>
+                                </div>
+                            </div>
+                            <h3>{role.name}</h3>
+                            <p className="permission-count">{role.permissions.length} permissions actives</p>
+                            <div className="permission-badges">
+                                {role.permissions.slice(0, 3).map(p => (
+                                    <span key={p.id} className="badge">{p.name.split('_').pop()}</span>
+                                ))}
+                                {role.permissions.length > 3 && <span className="more">+{role.permissions.length - 3}</span>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="card table-container">
+                    <div className="table-search">
+                        <Search size={18} />
+                        <input type="text" placeholder="Rechercher un collaborateur..." onChange={(e) => setSearchTerm(e.target.value)} />
+                    </div>
+                    <table className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Utilisateur</th>
+                                <th>Rôle Actuel</th>
+                                <th className="text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(user => (
+                                <tr key={user.id}>
+                                    <td>
+                                        <div className="user-info">
+                                            <span className="user-name">{user.name}</span>
+                                            <span className="user-email">{user.email}</span>
+                                        </div>
+                                    </td>
+                                    <td><span className="role-badge">{user.role?.name || 'Aucun'}</span></td>
+                                    <td className="text-right">
+                                        <select value={user.role_id || ''} onChange={(e) => rolesApi.updateUserRole(user.id, e.target.value).then(fetchData)} className="select-input">
+                                            <option value="">Attribuer un rôle...</option>
+                                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                        </select>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
+
+            {/* ── Modal ── */}
+            <div className={`modal-overlay ${showModal ? 'active' : ''}`} onClick={handleCloseModal}>
+                <div className="modal" onClick={e => e.stopPropagation()}>
+                    <div className="modal-header">
+                        <div>
+                            <h2 className="modal-title">
+                                {editingRole ? 'Modifier le Rôle' : 'Nouveau Rôle'}
+                            </h2>
+                            {/* Compteur live — visible dès qu'au moins 1 permission est cochée */}
+                            <p className={`modal-perm-counter ${selectedCount > 0 ? 'visible' : ''}`}>
+                                <Lock size={11} />
+                                {selectedCount} permission{selectedCount > 1 ? 's' : ''} sélectionnée{selectedCount > 1 ? 's' : ''}
+                            </p>
+                        </div>
+                        <button onClick={handleCloseModal} className="modal-close"><X size={20} /></button>
+                    </div>
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="modal-body">
+                            <div className="form-group">
+                                <label className="form-label">Nom du rôle</label>
+                                <input
+                                    className="form-input"
+                                    type="text" required
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    placeholder="ex: Chef de Chantier"
+                                />
+                            </div>
+
+                            <div className="permissions-section">
+                                <label className="form-label">Permissions disponibles</label>
+                                {Object.entries(groupedPermissions).map(([group, perms]) => (
+                                    <div key={group} className="permission-group">
+                                        <h4>{group}</h4>
+                                        <div className="permission-grid">
+                                            {perms.map(p => {
+                                                const isSelected = formData.permissions.includes(p.id);
+                                                const isAnimating = justToggled === p.id;
+                                                return (
+                                                    <div
+                                                        key={p.id}
+                                                        className={[
+                                                            'permission-item',
+                                                            isSelected ? 'selected' : '',
+                                                            isAnimating ? 'permission-item--pulse' : ''
+                                                        ].filter(Boolean).join(' ')}
+                                                        onClick={() => handleTogglePermission(p.id)}
+                                                    >
+                                                        <div className={`permission-checkbox ${isSelected ? 'permission-checkbox--checked' : ''}`}>
+                                                            <Check size={11} className="permission-checkmark" />
+                                                        </div>
+                                                        <span className="permission-label">
+                                                            {p.name}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="modal-footer">
+                            <button type="button" onClick={handleCloseModal} className="btn btn-ghost">Annuler</button>
+                            <button type="submit" className="btn btn-primary">Enregistrer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     );
 }

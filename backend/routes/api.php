@@ -90,9 +90,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chat', [\App\Http\Controllers\Api\ChatController::class, 'chat']);
 
     // Roles & Permissions
-    Route::apiResource('roles', \App\Http\Controllers\Api\RoleController::class);
     Route::get('/permissions', [\App\Http\Controllers\Api\PermissionController::class, 'index']);
-
+    
+    
+    // Nouvelles routes pour la gestion utilisateur/rôle
+    Route::get('/roles-users', [RoleController::class, 'users']);
+    Route::put('/roles-users/{user}', [RoleController::class, 'updateUserRole']);
+    Route::apiResource('roles', RoleController::class);
+    
     // ===== MODULE RH =====
     // Employees — routes sans paramètre AVANT apiResource pour éviter le conflit avec {employe}
     Route::get('/employes/user', [EmployeController::class, 'getEmployeByUserId']);
@@ -139,9 +144,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/employes/{employe}/rich-documents/{document}', [EmployeDocumentController::class, 'show']);
     Route::put('/employes/{employe}/rich-documents/{document}', [EmployeDocumentController::class, 'update']);
     Route::delete('/employes/{employe}/rich-documents/{document}', [EmployeDocumentController::class, 'destroy']);
-
+    
+    // ===== Contract Template =====
 });
-
+Route::post('/onlyoffice/callback', [App\Http\Controllers\Api\ContractTemplateController::class, 'onlyOfficeCallback']);
 // Public health check
 Route::get('/health', function () {
     return response()->json(['status' => 'ok', 'timestamp' => now()]);

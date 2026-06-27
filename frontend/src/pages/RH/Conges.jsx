@@ -270,7 +270,7 @@ export default function Conges() {
                     <h2 className="ged-page-title">Mes Congés</h2>
                     <p className="ged-page-subtitle">Gérez vos demandes de congés et consultez votre solde</p>
                 </div>
-                <button onClick={() => setShowModal(true)} className="btn-primary" style={{ height: 'fit-content' }}>
+                <button onClick={() => setShowModal(true)} className="btn btn-primary" style={{ height: 'fit-content' }}>
                     <Plus size={20} />
                     Nouvelle demande
                 </button>

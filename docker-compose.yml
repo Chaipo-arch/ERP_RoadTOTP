@@ -141,6 +141,8 @@ services:
     volumes:
       - ollama_data:/root/.ollama
       - ./ollama:/models
+    environment:
+      - OLLAMA_KEEP_ALIVE=5m   # garde le modèle en mémoire
     networks:
       - erp-network
     entrypoint: ["/bin/sh", "-c"]
@@ -161,6 +163,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./tp_vector_db:/chroma/chroma
       - chromadb_data:/chroma/chroma
     environment:
       - IS_PERSISTENT=TRUE
@@ -191,6 +194,31 @@ services:
     networks:
       - erp-network
 
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit_test
+    restart: always
+    ports:
+      - "1025:1025" # Port SMTP pour envoyer le mail
+      - "8025:8025" # Interface Web pour VOIR le mail
+    networks:
+      - erp-network
+
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: erp-onlyoffice
+    ports:
+      - "8081:80"
+    environment:
+      - JWT_ENABLED=false
+      - ALLOW_PRIVATE_IP_ADDRESS=true
+    networks:
+      - erp-network
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_logs:/var/log/onlyoffice
+
+
 networks:
   erp-network:
     driver: bridge
@@ -200,3 +228,5 @@ volumes:
   ollama_data:
   backend_vendor:
   chromadb_data:
+  onlyoffice_data:
+  onlyoffice_logs:
